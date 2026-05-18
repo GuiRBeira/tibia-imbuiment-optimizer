@@ -1,0 +1,17 @@
+{
+  "Vampirism": {
+    "Basic": [{"name": "Vampire Teeth", "amount": 25}],
+    "Intricate": [{"name": "Vampire Teeth", "amount": 25}, {"name": "Bloody Pincers", "amount": 15}],
+    "Powerful": [{"name": "Vampire Teeth", "amount": 25}, {"name": "Bloody Pincers", "amount": 15}, {"name": "Piece of Dead Brain", "amount": 5}]
+  },
+  "Void": {
+    "Basic": [{"name": "Rope Belts", "amount": 25}],
+    "Intricate": [{"name": "Rope Belts", "amount": 25}, {"name": "Silencer Claws", "amount": 25}],
+    "Powerful": [{"name": "Rope Belts", "amount": 25}, {"name": "Silencer Claws", "amount": 25}, {"name": "Some Grimeleech Wings", "amount": 5}]
+  },
+  "Strike": {
+    "Basic": [{"name": "Protective Charms", "amount": 20}],
+    "Intricate": [{"name": "Protective Charms", "amount": 20}, {"name": "Sabretooth", "amount": 25}],
+    "Powerful": [{"name": "Protective Charms", "amount": 20}, {"name": "Sabretooth", "amount": 25}, {"name": "Vexclaw Talon", "amount": 5}]
+  }
+}
