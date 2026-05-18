@@ -53,3 +53,8 @@ O projeto chegou a uma maturidade incrível no terminal, mas o céu é o limite.
 - [ ] **Alarme de Preços (Webhook)**: Ficar rodando em segundo plano e apitar/mandar mensagem no Discord se um Gold Token aparecer abaixo do preço alvo.
 - [ ] **Paging Automático**: Integrar com a biblioteca `pyautogui` para simular o clique na seta "Next Page" do Tibia Market e ler o histórico completo de transações em vez de só o Top 10.
 - [ ] **Cloud Sync**: Sincronizar o `prices.db` na nuvem (Supabase/Firebase) para guildas compartilharem a mesma base de inteligência do Market.
+
+### 🧠 Regras de Negócio Avançadas (Wall Street Mode)
+- [ ] **Market Depth (Liquidez)**: Ler não só o preço, mas também a coluna "Amount", somando matematicamente o livro de ofertas para encontrar o custo médio real (evitando ilusões de itens com volume = 1).
+- [ ] **Integração de Stash (Inventário)**: Abater do cálculo do OCR a quantidade de materiais que o jogador já tem guardados no DP.
+- [ ] **Market Creation Fee**: Embutir automaticamente a taxa percentual do Tibia Market no cálculo final ao simular a viabilidade de abrir centenas de Buy Offers (Pedidos de Compra).
