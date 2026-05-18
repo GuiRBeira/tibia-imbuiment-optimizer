@@ -1,90 +1,79 @@
 import sqlite3
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 DB_PATH = "prices.db"
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS prices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            world TEXT NOT NULL,
-            item_name TEXT NOT NULL,
-            price INTEGER NOT NULL
-        )
-    """)
+    
+    # Fazemos um PRAMGA para checar se a tabela existe e quais são as colunas
+    cursor.execute("PRAGMA table_info(prices)")
+    columns = [info[1] for info in cursor.fetchall()]
+    
+    if columns:
+        if "price" in columns and "instant_price" not in columns:
+            # Migration do MVP v1 para v2
+            cursor.execute("ALTER TABLE prices RENAME COLUMN price TO instant_price")
+            cursor.execute("ALTER TABLE prices ADD COLUMN order_price INTEGER DEFAULT 0")
+    else:
+        cursor.execute("""
+            CREATE TABLE prices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                world TEXT NOT NULL,
+                item_name TEXT NOT NULL,
+                instant_price INTEGER NOT NULL,
+                order_price INTEGER NOT NULL
+            )
+        """)
+        
     conn.commit()
     conn.close()
 
-def save_prices(world: str, gold_token_price: int, material_prices: Dict[str, int]):
+def save_prices(world: str, gold_token_prices: Tuple[int, int], material_prices: Dict[str, Tuple[int, int]]):
+    # Tuple[int, int] representa (instant_price, order_price)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     timestamp = datetime.now().isoformat()
     
     cursor.execute(
-        "INSERT INTO prices (timestamp, world, item_name, price) VALUES (?, ?, ?, ?)",
-        (timestamp, world, "Gold Token", gold_token_price)
+        "INSERT INTO prices (timestamp, world, item_name, instant_price, order_price) VALUES (?, ?, ?, ?, ?)",
+        (timestamp, world, "Gold Token", gold_token_prices[0], gold_token_prices[1])
     )
     
-    for mat_name, price in material_prices.items():
+    for mat_name, (inst_price, ord_price) in material_prices.items():
         cursor.execute(
-            "INSERT INTO prices (timestamp, world, item_name, price) VALUES (?, ?, ?, ?)",
-            (timestamp, world, mat_name, price)
+            "INSERT INTO prices (timestamp, world, item_name, instant_price, order_price) VALUES (?, ?, ?, ?, ?)",
+            (timestamp, world, mat_name, inst_price, ord_price)
         )
         
     conn.commit()
     conn.close()
 
-def get_latest_prices(world: str):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT item_name, price
-        FROM prices
-        WHERE world = ? AND timestamp = (
-            SELECT MAX(timestamp) FROM prices WHERE world = ?
-        )
-    """, (world, world))
-    
-    rows = cursor.fetchall()
-    conn.close()
-    
-    if not rows:
-        return None
-        
-    material_prices = {}
-    gold_token_price = 0
-    for item_name, price in rows:
-        if item_name == "Gold Token":
-            gold_token_price = price
-        else:
-            material_prices[item_name] = price
-            
-    return gold_token_price, material_prices
-
-def get_average_price_last_days(world: str, item_name: str, days: int = 7) -> Optional[float]:
+def get_average_prices_last_days(world: str, item_name: str, days: int = 7) -> Optional[Tuple[float, float]]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT AVG(price)
+        SELECT AVG(instant_price), AVG(order_price)
         FROM prices
         WHERE world = ?
         AND item_name = ?
         AND timestamp > datetime('now', ?)
     """, (world, item_name, f'-{days} days'))
-    result = cursor.fetchone()[0]
+    row = cursor.fetchone()
     conn.close()
-    return result if result else None
+    
+    if row and row[0] is not None:
+        return row[0], row[1]
+    return None
 
-def get_daily_average_prices(world: str, item_name: str, days: int = 7) -> Dict[str, float]:
+def get_daily_average_prices(world: str, item_name: str, days: int = 7) -> Dict[str, Tuple[float, float]]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT date(timestamp) as day, AVG(price)
+        SELECT date(timestamp) as day, AVG(instant_price), AVG(order_price)
         FROM prices
         WHERE world = ? AND item_name = ?
         AND timestamp > datetime('now', ?)
@@ -93,4 +82,4 @@ def get_daily_average_prices(world: str, item_name: str, days: int = 7) -> Dict[
     """, (world, item_name, f'-{days} days'))
     rows = cursor.fetchall()
     conn.close()
-    return {row[0]: row[1] for row in rows}
+    return {row[0]: (row[1], row[2]) for row in rows}
