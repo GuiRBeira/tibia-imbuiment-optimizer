@@ -79,3 +79,18 @@ def get_average_price_last_days(world: str, item_name: str, days: int = 7) -> Op
     result = cursor.fetchone()[0]
     conn.close()
     return result if result else None
+
+def get_daily_average_prices(world: str, item_name: str, days: int = 7) -> Dict[str, float]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT date(timestamp) as day, AVG(price)
+        FROM prices
+        WHERE world = ? AND item_name = ?
+        AND timestamp > datetime('now', ?)
+        GROUP BY day
+        ORDER BY day ASC
+    """, (world, item_name, f'-{days} days'))
+    rows = cursor.fetchall()
+    conn.close()
+    return {row[0]: row[1] for row in rows}
