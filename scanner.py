@@ -5,6 +5,9 @@ import os
 import re
 import numpy as np
 
+# Modo Debug (coloque True se quiser ver as imagens processadas na sua pasta)
+DEBUG_MODE = False
+
 def preprocess_image_for_tibia(image_source):
     if isinstance(image_source, str):
         img = cv2.imread(image_source)
@@ -13,73 +16,86 @@ def preprocess_image_for_tibia(image_source):
     else:
         img = image_source
         
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    h, w = img.shape[:2]
     
-    # Para fontes pixeladas sem anti-aliasing (como o Tibia), INTER_LINEAR ou NEAREST
-    # costumam evitar distorções que transformam "3" em "5".
+    # Smart Crop: Se a imagem for muito larga (tela inteira), recorta só o miolo.
+    if w >= 1600:
+        img = img[int(h*0.20):int(h*0.80), int(w*0.24):int(w*0.76)]
+        
+    # O Segredo do Texto Colorido (Vermelho/Verde):
+    gray = np.max(img, axis=2).astype(np.uint8)
+    
+    # Para fontes pixeladas sem anti-aliasing (como o Tibia)
     gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_LINEAR)
     
-    # Threshold de Otsu para calcular o melhor ponto de corte automaticamente
+    # Threshold de Otsu
     _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     
-    if isinstance(image_source, str):
-        cv2.imwrite(f"debug_processed_{os.path.basename(image_source)}", thresh)
-    else:
-        cv2.imwrite("debug_processed_auto.png", thresh)
+    if DEBUG_MODE:
+        if isinstance(image_source, str):
+            cv2.imwrite(f"debug_processed_{os.path.basename(image_source)}", thresh)
+        else:
+            cv2.imwrite("debug_processed_auto.png", thresh)
         
     return thresh
 
 def extract_text(image_source):
+    # Agora retorna os dados espaciais (coordenadas) em vez de apenas uma string plana
     processed_img = preprocess_image_for_tibia(image_source)
-    # psm 6 ou 11. Vamos tentar o 6 (bloco único) ou manter 11
-    custom_config = r'--oem 3 --psm 11'
-    text = pytesseract.image_to_string(processed_img, config=custom_config)
-    return text
+    # PSM 6 (Assume a single uniform block of text) força o Tesseract a ler a tela 
+    # como uma "planilha" tabular, parando de quebrar números no meio da vírgula!
+    custom_config = r'--oem 3 --psm 6'
+    data = pytesseract.image_to_data(processed_img, config=custom_config, output_type=pytesseract.Output.DICT)
+    return data, processed_img.shape
 
-def parse_market_prices(text):
-    # Limpa as datas e horários (ex: 2026-06-16, 21:50) para que o ano 
-    # não seja lido acidentalmente como um preço de 2026 gps!
-    text = re.sub(r'\d{4}-\d{2}-\d{2}', '', text)
-    text = re.sub(r'\d{2}[:-]?\d{2}[:-]?\d{2}', '', text)
+def parse_market_prices(ocr_result):
+    data, img_shape = ocr_result
+    h, w = img_shape
     
-    # Divide o texto na palavra "Buy Offers" (ou algo parecido)
-    parts = re.split(r'Buy Offers', text, flags=re.IGNORECASE)
-    
-    sell_text = parts[0]
-    buy_text = parts[1] if len(parts) > 1 else ""
-    
-    # Regex para achar números (com ou sem vírgula), ignorando datas
-    # Ex: 50,000 ou 50000
-    pattern = re.compile(r'\b(\d{1,3}(?:,\d{3})+|\d{3,})\b')
-    
-    # Busca todos os números grandes (> 100) no bloco de Sell Offers
-    sell_matches = pattern.findall(sell_text)
-    sell_prices = [int(m.replace(',', '')) for m in sell_matches]
-    
-    # Busca todos os números grandes (> 100) no bloco de Buy Offers
-    buy_matches = pattern.findall(buy_text)
-    buy_prices_raw = [int(m.replace(',', '')) for m in buy_matches]
-    
-    instant_price = sell_prices[0] if sell_prices else 0
-    
-    # Filtro de Ouro do Tibia Market:
-    # Um Pedido de Compra (Buy Offer) NUNCA é maior que a Compra Instantânea (Sell Offer).
-    # Se o Tesseract ler um "Total Price" gigantesco antes do "Piece Price", a gente ignora ele!
-    valid_buy_prices = []
-    if instant_price > 0:
-        valid_buy_prices = [p for p in buy_prices_raw if p <= instant_price]
-    else:
-        # Se por acaso o item não tiver Sell Offers, pegamos o primeiro número 
-        # que não seja absurdamente alto (> 100k para um material normal).
-        # (Isso é um fallback caso o market esteja vazio)
-        valid_buy_prices = [p for p in buy_prices_raw if p < 100000]
+    # 1. Encontra a linha "Buy Offers" para dividir o que é Compra do que é Venda
+    buy_y = h
+    for i, text in enumerate(data['text']):
+        if 'Buy' in text or 'Offers' in text:
+            if h * 0.4 < data['top'][i] < h * 0.7:
+                buy_y = data['top'][i]
+                break
+                
+    # 2. Encontra a linha do cabeçalho "Piece Price" para ignorar lixo no topo
+    piece_price_y = 0
+    for i, text in enumerate(data['text']):
+        if 'Piece' in text or 'Price' in text:
+            if data['top'][i] < h * 0.4:  # Cabeçalho do topo (Sell Offers)
+                piece_price_y = data['top'][i]
+                break
+                
+    sell_prices = []
+    buy_prices = []
+
+    min_x = w * 0.58
+    max_x = w * 0.76
+
+    for i, text in enumerate(data['text']):
+        text = text.strip().replace(',', '')
+        left = data['left'][i]
+        top = data['top'][i]
         
-    order_price = valid_buy_prices[0] if valid_buy_prices else (buy_prices_raw[0] if buy_prices_raw else 0)
+        # Só pega o que está dentro da coluna X E abaixo do cabeçalho Y!
+        if min_x < left < max_x and top > piece_price_y + 15:
+            if text.isdigit():
+                val = int(text)
+                if val > 0:
+                    if top < buy_y:
+                        sell_prices.append(val)
+                    else:
+                        buy_prices.append(val)
+                        
+    instant_price = sell_prices[0] if sell_prices else 0
+    order_price = buy_prices[0] if buy_prices else 0
     
     return instant_price, order_price
 
 if __name__ == "__main__":
-    img_path = "market.png" if len(sys.argv) == 1 else sys.argv[1]
+    img_path = "image.png" if len(sys.argv) == 1 else sys.argv[1]
     
     if not os.path.exists(img_path):
         print(f"❌ Imagem não encontrada: {img_path}")

@@ -1,33 +1,40 @@
 import tkinter as tk
+from PIL import Image, ImageTk
 import mss
 
 class RegionSelector:
     def __init__(self):
         self.root = tk.Tk()
         
-        # Obter o tamanho total de todos os monitores somados para cobrir tudo
-        with mss.mss() as sct:
+        # Tirar print de todas as telas juntas e "congelar"
+        with mss.MSS() as sct:
             mon = sct.monitors[0]
             self.width = mon["width"]
             self.height = mon["height"]
             self.left = mon["left"]
             self.top = mon["top"]
+            sct_img = sct.grab(mon)
+            # Converter a imagem do MSS (BGRA) para imagem do Pillow (RGB)
+            self.pil_img = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
 
-        # Configurar a janela para ser sem bordas e semi-transparente
         self.root.geometry(f"{self.width}x{self.height}+{self.left}+{self.top}")
-        self.root.overrideredirect(True) # Remove barra de título
-        self.root.attributes('-alpha', 0.3) # Transparência 30%
-        self.root.attributes('-topmost', True) # Sempre no topo
+        self.root.overrideredirect(True)
+        self.root.attributes('-topmost', True)
         self.root.configure(cursor="cross")
         
-        self.canvas = tk.Canvas(self.root, cursor="cross", bg="black")
+        self.canvas = tk.Canvas(self.root, cursor="cross", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
+        
+        # Coloca a print screen da tela como fundo (Fica 100% opaco e não depende do OS)
+        self.tk_img = ImageTk.PhotoImage(self.pil_img)
+        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_img)
+        
+        # Escurecer levemente a imagem para dar destaque à seleção
+        self.overlay = self.canvas.create_rectangle(0, 0, self.width, self.height, fill="black", stipple="gray50", outline="")
         
         self.canvas.bind("<ButtonPress-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
-        
-        # Pressione ESC para cancelar
         self.root.bind("<Escape>", lambda e: self.root.destroy())
         
         self.start_x = None
@@ -38,8 +45,7 @@ class RegionSelector:
     def on_press(self, event):
         self.start_x = event.x
         self.start_y = event.y
-        # Cria um retângulo que vai sendo desenhado na tela
-        self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, 1, 1, outline='cyan', width=2, fill="white")
+        self.rect = self.canvas.create_rectangle(self.start_x, self.start_y, 1, 1, outline='cyan', width=2)
 
     def on_drag(self, event):
         curX, curY = (event.x, event.y)
@@ -51,7 +57,6 @@ class RegionSelector:
         x2 = max(self.start_x, event.x)
         y2 = max(self.start_y, event.y)
         
-        # O mss precisa do top e left absolutos, então somamos o offset do monitor 0
         self.bbox = {
             "top": self.top + y1,
             "left": self.left + x1,

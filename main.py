@@ -1,5 +1,7 @@
 import sys
-import mss
+import os
+import glob
+import time
 import numpy as np
 import cv2
 from rich.console import Console
@@ -12,37 +14,49 @@ from scanner import extract_text, parse_market_prices
 
 console = Console()
 
+def get_latest_screenshot(folder):
+    files = glob.glob(os.path.join(folder, "*.png"))
+    if not files:
+        return None
+    return max(files, key=os.path.getctime)
+
+def wait_for_screenshot(item_name, screenshot_dir, last_file):
+    console.print(f"👉 Pesquise [cyan]{item_name}[/cyan] no Market e aperte [bold yellow]Print Screen (PrtScn)[/bold yellow]")
+    while True:
+        current_latest = get_latest_screenshot(screenshot_dir)
+        if current_latest and current_latest != last_file:
+            time.sleep(0.3)  # Dá tempo do sistema operacional salvar o arquivo
+            # Lemos direto com o caminho do arquivo para o Tesseract
+            ocr_result = extract_text(current_latest)
+            inst, ord = parse_market_prices(ocr_result)
+            console.print(f"   [green]✅ Lido: Inst. {inst:,} gp | Pedido {ord:,} gp[/green]\n")
+            return (inst, ord), current_latest
+        time.sleep(0.5)
+
 def auto_scan_prices(imbuements_data, world: str):
-    console.print("\n[bold green]📷 Modo Auto-Scan Ativado![/bold green]")
-    console.print("Deixe este terminal meio de lado junto com o Tibia.")
-    console.print("Vá no Market, pesquise o item, e aperte [bold yellow]ENTER[/bold yellow] neste terminal para capturar!\n")
+    screenshot_dir = os.path.expanduser("~/Pictures/Screenshots")
+    if not os.path.exists(screenshot_dir):
+        console.print(f"[bold red]❌ Pasta de Screenshots não encontrada: {screenshot_dir}[/bold red]")
+        console.print("Por favor, tire uma print para que o Ubuntu crie a pasta, e reinicie o programa.")
+        sys.exit(1)
+
+    console.print("\n[bold green]🥷 Modo Auto-Scan (Wayland Ninja) Ativado![/bold green]")
+    console.print("Como usar: Basta olhar o item pedido, pesquisar no Tibia, e apertar sua tecla de [yellow]Print Screen[/yellow]!\n")
     
-    with mss.mss() as sct:
-        monitor = sct.monitors[1]  # Monitor primário
-        
-        Prompt.ask(f"👉 Abra [yellow]Gold Token[/yellow] no Market e aperte ENTER")
-        img = np.array(sct.grab(monitor))
-        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        texto = extract_text(img)
-        token_inst, token_ord = parse_market_prices(texto)
-        console.print(f"✅ Lido: Inst. {token_inst:,} gp | Pedido {token_ord:,} gp\n")
-        token_prices = (token_inst, token_ord)
-        
-        all_materials = set()
-        for tiers in imbuements_data.values():
-            for tier_info in tiers.values():
-                for material in tier_info.materials:
-                    all_materials.add(material.name)
-        
-        material_prices = {}
-        for mat in sorted(all_materials):
-            Prompt.ask(f"👉 Abra [cyan]{mat}[/cyan] no Market e aperte ENTER")
-            img = np.array(sct.grab(monitor))
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-            texto = extract_text(img)
-            mat_inst, mat_ord = parse_market_prices(texto)
-            console.print(f"✅ Lido: Inst. {mat_inst:,} gp | Pedido {mat_ord:,} gp\n")
-            material_prices[mat] = (mat_inst, mat_ord)
+    last_file = get_latest_screenshot(screenshot_dir)
+    
+    token_prices, last_file = wait_for_screenshot("Gold Token", screenshot_dir, last_file)
+    
+    all_materials = set()
+    for tiers in imbuements_data.values():
+        for tier_info in tiers.values():
+            for material in tier_info.materials:
+                all_materials.add(material.name)
+    
+    material_prices = {}
+    for mat in sorted(all_materials):
+        prices, last_file = wait_for_screenshot(mat, screenshot_dir, last_file)
+        material_prices[mat] = prices
             
     return token_prices, material_prices
 
