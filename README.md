@@ -46,8 +46,8 @@ python test_regression.py
 ## 🗺️ TODO (Roadmap de Evolução)
 O projeto chegou a uma maturidade incrível no terminal, mas o céu é o limite. Aqui estão algumas ideias para a evolução natural:
 
-- [ ] **Filtro Sob Demanda**: Permitir que o usuário selecione quais imbuements específicos ele deseja calcular naquela sessão, evitando escanear dezenas de materiais desnecessários.
-- [ ] **Limpeza Automática (Garbage Collector)**: Apagar o arquivo nativo de Print Screen do Ubuntu assim que o OCR terminar de ler, para não lotar o HD do usuário em ambiente de produção.
+- [x] **Filtro Sob Demanda / Fallback Histórico Híbrido**: Otimizador inteligente que carrega os últimos preços do banco de dados e permite ao jogador atualizar apenas os itens desejados via OCR livre (auto-detectável) ou edição manual interativa.
+- [x] **Limpeza Automática (Garbage Collector)**: Apagar o arquivo nativo de Print Screen do Ubuntu assim que o OCR terminar de ler, para não lotar o HD do usuário em ambiente de produção.
 - [ ] **Interface Gráfica (Web/Electron)**: Mudar do Terminal para um Dashboard Bonito em React ou PyQt.
 - [ ] **Multi-World Arbitrage**: Comparar os preços do seu banco de dados entre servidores diferentes para buscar oportunidades de Arbitragem.
 - [ ] **Alarme de Preços (Webhook)**: Ficar rodando em segundo plano e apitar/mandar mensagem no Discord se um Gold Token aparecer abaixo do preço alvo.

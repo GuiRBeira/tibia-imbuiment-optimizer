@@ -83,3 +83,16 @@ def get_daily_average_prices(world: str, item_name: str, days: int = 7) -> Dict[
     rows = cursor.fetchall()
     conn.close()
     return {row[0]: (row[1], row[2]) for row in rows}
+
+def get_latest_prices(world: str) -> Dict[str, Tuple[int, int]]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT item_name, instant_price, order_price, MAX(timestamp)
+        FROM prices
+        WHERE world = ?
+        GROUP BY item_name
+    """, (world,))
+    rows = cursor.fetchall()
+    conn.close()
+    return {row[0]: (row[1], row[2]) for row in rows}

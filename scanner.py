@@ -94,6 +94,43 @@ def parse_market_prices(ocr_result):
     
     return instant_price, order_price
 
+def detect_item_name(ocr_result, known_items):
+    data, _ = ocr_result
+    
+    # Normalizar palavras lidas pelo Tesseract
+    words = []
+    for text in data['text']:
+        clean = re.sub(r'[^a-z0-9]', '', text.lower())
+        if clean:
+            words.append(clean)
+            
+    best_item = None
+    best_score = 0
+    
+    for item in known_items:
+        item_clean = re.sub(r'[^a-z0-9\s]', '', item.lower())
+        item_words = item_clean.split()
+        
+        matches = 0
+        for iw in item_words:
+            # Fuzzy match para o Tesseract que lê com pequenas imperfeições
+            for w in words:
+                if iw == w or (len(iw) >= 4 and iw in w):
+                    matches += 1
+                    break
+        
+        score = matches / len(item_words) if item_words else 0
+        weighted_score = score * (1 + 0.1 * len(item_words))
+        
+        if weighted_score > best_score:
+            best_score = weighted_score
+            best_item = item
+            
+    if best_score < 0.5:
+        return None
+        
+    return best_item
+
 if __name__ == "__main__":
     img_path = "image.png" if len(sys.argv) == 1 else sys.argv[1]
     

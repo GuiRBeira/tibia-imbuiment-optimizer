@@ -5,7 +5,7 @@ from scanner import extract_text, parse_market_prices
 # Formato: ("caminho_da_imagem", Sell_Esperado, Buy_Esperado)
 TEST_CASES = [
     ("tests/vampire_teeth.png", 853, 648),
-    ("tests/bloody_pincer.png", 22000, 15071),
+    ("tests/bloody_dwarven_beard.png", 22000, 15071),
 ]
 
 def run_tests():
